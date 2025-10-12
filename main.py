@@ -2,6 +2,7 @@ import pygame
 import sys
 from src.ui import UserInterface
 from src.polygon import PolygonManager
+from src.transformations import TransformManager
 
 def main():
     pygame.init()
@@ -10,7 +11,8 @@ def main():
     clock = pygame.time.Clock()
     
     polygon_manager = PolygonManager()
-    ui = UserInterface(screen, polygon_manager)
+    transform_manager = TransformManager(polygon_manager)
+    ui = UserInterface(screen, polygon_manager, transform_manager)
     
     running = True
     while running:
@@ -19,7 +21,7 @@ def main():
                 running = False
             ui.handle_event(event)
         
-        screen.fill((255, 255, 255))  # Белый фон
+        screen.fill((255, 255, 255))  # White background
         ui.draw()
         pygame.display.flip()
         clock.tick(60)
