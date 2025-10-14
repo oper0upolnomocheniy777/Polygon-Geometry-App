@@ -109,15 +109,13 @@ def is_convex_polygon(polygon):
 def point_in_convex_polygon(point, polygon):
     """
     Проверяет принадлежность точки выпуклому полигону.
-    
-    Args:
-        point: tuple (x, y) - проверяемая точка
-        polygon: list of tuples - вершины полигона
-    
-    Returns:
-        bool: True если точка внутри полигона
+    Исправленная версия - проверяет одинаковость знаков для всех ребер.
     """
+    if len(polygon) < 3:
+        return False
+    
     n = len(polygon)
+    signs = []
     
     for i in range(n):
         edge_start = polygon[i]
@@ -125,11 +123,29 @@ def point_in_convex_polygon(point, polygon):
         
         classification = classify_point(edge_start, edge_end, point)
         
-        # Для выпуклого полигона все точки должны быть с одной стороны
-        if classification == "right":  # или "left" в зависимости от обхода
-            return False
+        # Определяем знак для текущего ребра
+        if classification == "left":
+            signs.append(1)
+        elif classification == "right":
+            signs.append(-1)
+        elif classification == "on":
+            signs.append(0)
     
-    return True
+    # Отладочный вывод
+    print(f"🔍 Знаки для точки {point}: {signs}")
+    
+    # Если есть точки на границе - считаем внутри
+    if 0 in signs:
+        return True
+    
+    # Проверяем что все ненулевые знаки одинаковы
+    non_zero_signs = [s for s in signs if s != 0]
+    if not non_zero_signs:  # Все точки на границе
+        return True
+    
+    # Все ненулевые знаки должны быть одинаковы
+    first_sign = non_zero_signs[0]
+    return all(sign == first_sign for sign in non_zero_signs)
 
 
 def point_in_nonconvex_polygon(point, polygon):
