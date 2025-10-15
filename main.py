@@ -3,7 +3,6 @@ import sys
 from src.ui import UserInterface
 from src.polygon import PolygonManager
 from src.transformations import TransformManager
-# ИМПОРТИРУЕМ ВАШИ АЛГОРИТМЫ
 from src.algorithms import (
     classify_point, 
     find_intersection, 
@@ -21,114 +20,159 @@ def main():
     transform_manager = TransformManager(polygon_manager)
     ui = UserInterface(screen, polygon_manager, transform_manager)
     
-    # ПЕРЕМЕННЫЕ ДЛЯ ВИЗУАЛИЗАЦИИ РЕЗУЛЬТАТОВ
-    test_point = None
-    point_result = ""
-    polygon_type_info = ""
+    demo_edges = []  # Ребра для демонстрации пересечений
+    demo_current_edge = None  # Текущее создаваемое ребро
+    demo_intersections = []  # Точки пересечений
+    demo_test_point = None  # Точка для тестирования
+    demo_results = []  # Результаты проверок
     
     running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            ui.handle_event(event)
+            ui.handle_event(event)  # Оригинальный обработчик
             
-            # ДОБАВЛЯЕМ ПРОВЕРКУ ВАШИХ АЛГОРИТМОВ ПРАВОЙ КНОПКОЙ МЫШИ
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:  # Правая кнопка мыши
-                test_point = event.pos
-                print(f"🧪 Тестируем точку: {test_point}")
+            if event.type == pygame.KEYDOWN:
+                # F1 - создать тестовое ребро
+                if event.key == pygame.K_F1:
+                    if demo_current_edge is None:
+                        demo_current_edge = pygame.mouse.get_pos()
                 
-                # ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ ТОЧКИ ПОЛИГОНУ (ваш алгоритм)
-                if polygon_manager.polygons:
-                    current_polygon = polygon_manager.polygons[-1]
+                # F2 - тестировать точку
+                elif event.key == pygame.K_F2:
+                    demo_test_point = pygame.mouse.get_pos()
+                    demo_results = []
                     
-                    # ПРОВЕРЯЕМ РАЗНЫЕ ВАРИАНТЫ АТРИБУТОВ
-                    vertices = None
+                    # Проверка точки в полигонах
+                    if polygon_manager.polygons:
+                        for i, polygon in enumerate(polygon_manager.polygons):
+                            vertices = get_polygon_vertices(polygon)
+                            if vertices and len(vertices) >= 3:
+                                is_inside = point_in_polygon(demo_test_point, vertices)
+                                poly_type = "выпуклый" if is_convex_polygon(vertices) else "невыпуклый"
+                                demo_results.append(f"Полигон {i+1} ({poly_type}): {'ВНУТРИ' if is_inside else 'СНАРУЖИ'}")
                     
-                    if hasattr(current_polygon, 'vertices'):
-                        vertices = current_polygon.vertices
-                    elif hasattr(current_polygon, 'points'):
-                        vertices = current_polygon.points
-                    elif hasattr(current_polygon, 'nodes'):
-                        vertices = current_polygon.nodes
-                    elif isinstance(current_polygon, list):
-                        vertices = current_polygon
-                    
-                    if vertices and len(vertices) >= 3:
-                        # ДЕБАГ: выводим вершины для проверки
-                        print(f"🔍 Вершины полигона: {vertices}")
-                        
-                        is_inside = point_in_polygon(test_point, vertices)
-                        point_result = f"Точка {test_point}: {'ВНУТРИ' if is_inside else 'СНАРУЖИ'} полигона"
-                        print(f"📊 {point_result}")
-                        
-                        # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА ДЛЯ ВЫПУКЛОГО ПОЛИГОНА
-                        if is_convex_polygon(vertices):
-                            print("🔷 Полигон выпуклый, проверяем алгоритм...")
-                            # Проверяем классификацию для каждого ребра
-                            for i in range(len(vertices)):
-                                edge_start = vertices[i]
-                                edge_end = vertices[(i + 1) % len(vertices)]
-                                classification = classify_point(edge_start, edge_end, test_point)
-                                print(f"   Ребро {i}: {edge_start}-{edge_end}, точка: {classification}")
+                    # Классификация относительно ребер
+                    if demo_edges:
+                        for i, edge in enumerate(demo_edges):
+                            classification = classify_point(edge[0], edge[1], demo_test_point)
+                            demo_results.append(f"Ребро {i+1}: {classification}")
+                
+                # F3 - очистить демо-данные
+                elif event.key == pygame.K_F3:
+                    demo_edges.clear()
+                    demo_intersections.clear()
+                    demo_current_edge = None
+                    demo_test_point = None
+                    demo_results = []
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Shift + ЛКМ - создать ребро
+                if event.button == 1 and pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                    if demo_current_edge is None:
+                        demo_current_edge = event.pos
                     else:
-                        print("⚠️  Недостаточно вершин для проверки полигона")
+                        new_edge = (demo_current_edge, event.pos)
+                        demo_edges.append(new_edge)
+                        # Поиск пересечений
+                        update_intersections(demo_edges, demo_intersections)
+                        demo_current_edge = None
         
         # ОСНОВНАЯ ОТРИСОВКА
-        screen.fill((255, 255, 255))  # Белый фон
+        screen.fill((255, 255, 255))
+        ui.draw()  # Оригинальная отрисовка
         
-        # Отрисовываем основной интерфес (от других участников)
-        ui.draw()
+        # ДОПОЛНИТЕЛЬНАЯ ОТРИСОВКА ДЛЯ ДЕМОНСТРАЦИИ
+        # 1. Рисуем ребра
+        for edge in demo_edges:
+            pygame.draw.line(screen, (0, 0, 255), edge[0], edge[1], 2)
         
-        # ОПРЕДЕЛЯЕМ ТИП ПОЛИГОНА (ваш алгоритм)
-        polygon_type_info = ""
-        if polygon_manager.polygons:
-            current_polygon = polygon_manager.polygons[-1]
-            
-            # ПРОВЕРЯЕМ РАЗНЫЕ ВАРИАНТЫ АТРИБУТОВ
-            vertices = None
-            
-            if hasattr(current_polygon, 'vertices'):
-                vertices = current_polygon.vertices
-            elif hasattr(current_polygon, 'points'):
-                vertices = current_polygon.points
-            elif hasattr(current_polygon, 'nodes'):
-                vertices = current_polygon.nodes
-            elif isinstance(current_polygon, list):
-                vertices = current_polygon
-            
-            if vertices and len(vertices) >= 3:
-                is_convex = is_convex_polygon(vertices)
-                polygon_type_info = f"Полигон: {'ВЫПУКЛЫЙ' if is_convex else 'НЕВЫПУКЛЫЙ'} ({len(vertices)} вершин)"
-                print(f"📐 {polygon_type_info}")
+        # 2. Рисуем точки пересечения
+        for intersection in demo_intersections:
+            pygame.draw.circle(screen, (255, 0, 0), (int(intersection[0]), int(intersection[1])), 6)
         
-        # ВИЗУАЛИЗИРУЕМ РЕЗУЛЬТАТЫ ВАШИХ АЛГОРИТМОВ (В ЛЕВОМ НИЖНЕМ УГЛУ)
-        font = pygame.font.Font(None, 32)
+        # 3. Рисуем текущее создаваемое ребро
+        mouse_pos = pygame.mouse.get_pos()
+        if demo_current_edge:
+            pygame.draw.line(screen, (0, 255, 0), demo_current_edge, mouse_pos, 2)
         
-        # Координаты для левого нижнего угла
-        text_y = screen.get_height() - 100  # Отступ от низа
+        # 4. Рисуем тестовую точку
+        if demo_test_point:
+            pygame.draw.circle(screen, (255, 0, 0), demo_test_point, 6)
         
-        # Показываем тип полигона
-        if polygon_type_info:
-            type_surface = font.render(polygon_type_info, True, (0, 100, 0))  # Темно-зеленый
-            screen.blit(type_surface, (10, text_y))
+        # 5. Отображаем информацию
+        draw_demo_info(screen, polygon_manager.polygons, demo_edges, demo_intersections, demo_results)
         
-        # Показываем тестовую точку и результат
-        if test_point:
-            # Рисуем красную точку
-            pygame.draw.circle(screen, (255, 0, 0), test_point, 6)
-            
-            # Показываем текст результата под типом полигона
-            if point_result:
-                result_surface = font.render(point_result, True, (0, 0, 255))  # Синий
-                screen.blit(result_surface, (10, text_y + 35))
-        
-        # ОБНОВЛЯЕМ ЭКРАН
         pygame.display.flip()
         clock.tick(60)
     
     pygame.quit()
     sys.exit()
+
+def get_polygon_vertices(polygon):
+    """Получает вершины полигона"""
+    if hasattr(polygon, 'vertices'):
+        return polygon.vertices
+    elif hasattr(polygon, 'points'):
+        return polygon.points
+    elif hasattr(polygon, 'nodes'):
+        return polygon.nodes
+    elif isinstance(polygon, list):
+        return polygon
+    return None
+
+def update_intersections(edges, intersections):
+    """Обновляет точки пересечений"""
+    intersections.clear()
+    for i, edge1 in enumerate(edges):
+        for j, edge2 in enumerate(edges[i+1:], i+1):
+            intersection = find_intersection(edge1, edge2)
+            if intersection:
+                intersections.append(intersection)
+
+def draw_demo_info(screen, polygons, edges, intersections, results):
+    """Отображает информацию о демонстрации"""
+    font = pygame.font.Font(None, 24)
+    small_font = pygame.font.Font(None, 20)
+    
+    # Информация в правом верхнем углу
+    x = screen.get_width() - 300
+    y = 10
+    
+    # Управление
+    controls = [
+        "ДЛЯ АЛГОРИТМОВ:",
+        "Shift+ЛКМ - создать ребро",
+        "F2 - тест точки под курсором",
+        "F3 - очистить демо",
+    ]
+    
+    for i, text in enumerate(controls):
+        color = (100, 0, 100) if i == 0 else (80, 80, 80)
+        surface = small_font.render(text, True, color)
+        screen.blit(surface, (x, y + i * 20))
+    
+    y += len(controls) * 20 + 10
+    
+    # Статистика
+    stats = [
+        f"Полигонов: {len(polygons)}",
+        f"Ребер: {len(edges)}",
+        f"Пересечений: {len(intersections)}"
+    ]
+    
+    for i, text in enumerate(stats):
+        surface = small_font.render(text, True, (0, 100, 0))
+        screen.blit(surface, (x, y + i * 20))
+    
+    y += len(stats) * 20 + 10
+    
+    # Результаты тестирования
+    if results:
+        for i, result in enumerate(results):
+            surface = small_font.render(result, True, (0, 0, 200))
+            screen.blit(surface, (x, y + i * 18))
 
 if __name__ == "__main__":
     main()
